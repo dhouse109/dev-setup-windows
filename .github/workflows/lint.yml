@@ -1,0 +1,62 @@
+# Checks on every push and pull request. The scripts only run on the Windows laptops (PowerShell on the
+# host, bash inside WSL), so CI checks what can be checked anywhere: that bash and PowerShell can parse
+# them, that ShellCheck and PSScriptAnalyzer find no errors, and that no secret got committed.
+# reference/ is a read-only copy of the Chromebook bundle, linted in its own repo, so it is skipped here.
+name: lint
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: bash -n and shellcheck (errors only)
+        run: |
+          mapfile -t files < <(git ls-files '*.sh' ':!:reference/**')
+          if [ ${#files[@]} -eq 0 ]; then echo "No bash scripts yet."; exit 0; fi
+          for f in "${files[@]}"; do echo "bash -n $f"; bash -n "$f"; done
+          shellcheck --version
+          shellcheck -S error "${files[@]}"
+      - name: no CRLF in bash scripts
+        run: |
+          bad=$(git ls-files '*.sh' | xargs -r grep -l $'\r' || true)
+          if [ -n "$bad" ]; then echo "CRLF line endings in:"; echo "$bad"; exit 1; fi
+
+  powershell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: parse and PSScriptAnalyzer (errors only)
+        shell: pwsh
+        run: |
+          $files = git ls-files '*.ps1' '*.psm1' ':!:reference/**'
+          if (-not $files) { 'No PowerShell scripts yet.'; exit 0 }
+          $failed = $false
+          foreach ($f in $files) {
+            $errs = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $f), [ref]$null, [ref]$errs) | Out-Null
+            if ($errs) { $errs | ForEach-Object { "${f}: $($_.Message)" }; $failed = $true }
+          }
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          foreach ($f in $files) {
+            $r = Invoke-ScriptAnalyzer -Path $f -Severity Error
+            if ($r) { $r | Format-Table -AutoSize | Out-String | Write-Output; $failed = $true }
+          }
+          if ($failed) { exit 1 }
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

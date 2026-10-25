@@ -1,0 +1,18 @@
+# gitleaks configuration: the default rules, minus two known false positives in the Chromebook scripts
+# (copied into reference/dev-setup-chromebook/, and likely to carry into the forked Windows scripts).
+title = "dev-setup-windows"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public values that look like secrets"
+regexTarget = "secret"
+regexes = [
+  # Azurite's storage key. Microsoft publishes it as the fixed key of the local Azure Storage
+  # emulator (devstoreaccount1); dev-demo's Azure demo uses it. It opens nothing outside the emulator.
+  '''^Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==$''',
+  # The secrets.env template's empty *_ONCE="" lines: the generic rule reads the next line's name as a
+  # value. Real keys never live in these scripts (they go in ~/.config/dev-init/secrets.env).
+  '''^[A-Z0-9_]+_ONCE=$''',
+]

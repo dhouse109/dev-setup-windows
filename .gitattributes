@@ -1,0 +1,6 @@
+# Bash scripts run inside WSL, where CRLF breaks them ($'\r': command not found). Keep them LF in every
+# checkout, including Windows Git with core.autocrlf=true.
+* text=auto
+*.sh text eol=lf
+*.bash text eol=lf
+wsl.conf text eol=lf
